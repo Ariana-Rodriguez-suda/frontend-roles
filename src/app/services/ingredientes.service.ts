@@ -4,10 +4,13 @@ import { Observable } from 'rxjs';
 
 export interface Ingrediente {
   id?: number;
-  nombre: string;
-  precio: number;
-  unidad?: string;
+  nombre:  string;
+  precio: number ;
+  unidad?: number;
+  peso?: number;
+  unidadPeso?: string;
 }
+
 
 @Injectable({
   providedIn: 'root'
@@ -28,8 +31,8 @@ deleteIngrediente(id: number): Observable<void> {
   return this.http.delete<void>(`${this.apiUrl}/${id}`);
 }
 
-updateIngrediente(ingrediente: Ingrediente) { 
-  return this.http.put<Ingrediente>(`${this.apiUrl}/${ingrediente.id}`, ingrediente);
+updateIngrediente(id: number, data: Partial<Ingrediente>) {
+  return this.http.put<Ingrediente>(`${this.apiUrl}/${id}`, data);
 }
 
 }

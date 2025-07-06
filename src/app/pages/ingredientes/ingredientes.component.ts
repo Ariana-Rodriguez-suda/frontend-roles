@@ -5,102 +5,114 @@ import { HttpClientModule } from '@angular/common/http';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 
 @Component({
-  standalone: true,
-  selector: 'app-ingredientes',
-  imports: [CommonModule, HttpClientModule, ReactiveFormsModule],
-  template: `
-    <h2>Ingredientes</h2>
-    <form [formGroup]="form" (ngSubmit)="guardar()">
-      <input type="text" placeholder="Nombre" formControlName="nombre" />
-      <input type="number" placeholder="Precio" formControlName="precio" />
-      <input type="text" placeholder="Unidad" formControlName="unidad" />
-      <button type="submit">{{ idEditando ? 'Actualizar' : 'Agregar' }}</button>
-      <button type="button" *ngIf="idEditando" (click)="cancelarEdicion()">Cancelar</button>
-    </form>
-    <table>
-      <thead>
-        <tr>
-          <th>Nombre</th>
-          <th>Precio</th>
-          <th>Unidad</th>
-          <th>Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let ing of ingredientes">
-          <td>{{ ing.nombre }}</td>
-          <td>{{ ing.precio }}</td>
-          <td>{{ ing.unidad }}</td>
-          <td>
-            <button (click)="editar(ing)">Editar</button>
-            <button (click)="eliminar(ing.id!)">Eliminar</button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  `
+  standalone: true,
+  selector: 'app-ingredientes',
+  imports: [CommonModule, HttpClientModule, ReactiveFormsModule],
+  templateUrl: 'ingredientes.component.html'
 })
 export class IngredientesComponent implements OnInit {
-  ingredientes: Ingrediente[] = [];
-  form: FormGroup;
-  idEditando: number | null = null;
+  ingredientes: Ingrediente[] = [];
+  form: FormGroup;
+  idEditando: number | null = null;
+  pesoKg: number | null = null;
 
-  constructor(
-    private ingredientesService: IngredientesService,
-    private fb: FormBuilder
-  ) {
-    this.form = this.fb.group({
-      nombre: ['', Validators.required],
-      precio: [0, [Validators.required, Validators.min(0.01)]],
-      unidad: ['']
-    });
-  }
+  constructor(
+    private ingredientesService: IngredientesService,
+    private fb: FormBuilder
+  ) {
+    this.form = this.fb.group({
+      nombre: ['', Validators.required],
+      precio: [null, Validators.required],
+      unidad: [null],
+      peso: [null],
+      unidadPeso: ['g'],
+    });
+  }
 
-  ngOnInit(): void {
-    this.cargarIngredientes();
-  }
+  ngOnInit(): void {
+    this.cargarIngredientes();
+  }
 
-  cargarIngredientes() {
-    this.ingredientesService.getIngredientes().subscribe(data => {
-      this.ingredientes = data;
-    });
-  }
+  cargarIngredientes() {
+    this.ingredientesService.getIngredientes().subscribe(data => {
+      this.ingredientes = data;
+    });
+  }
 
-  guardar() {
-    if (this.form.invalid) return;
+  guardar() {
+    if (this.form.invalid) return;
 
-    const ingrediente: Ingrediente = {
-      id: this.idEditando ?? undefined,
-      ...this.form.value
-    };
+    const ingrediente: Ingrediente = {
+      nombre: this.form.value.nombre,
+      precio: this.form.value.precio,
+      unidad: this.form.value.unidad,
+      peso: this.form.value.peso,
+      unidadPeso: this.form.value.unidadPeso
+    };
 
-    const request$ = this.idEditando
-      ? this.ingredientesService.updateIngrediente(ingrediente)
-      : this.ingredientesService.addIngrediente(ingrediente);
+    this.pesoKg = this.convertirAKg(ingrediente.peso ?? 0, ingrediente.unidadPeso ?? 'g');
 
-    request$.subscribe(() => {
-      this.cancelarEdicion();
-      this.cargarIngredientes();
-    });
-  }
+const request$ = this.idEditando
+  ? this.ingredientesService.updateIngrediente(this.idEditando, ingrediente)
+  : this.ingredientesService.addIngrediente(ingrediente);
 
-  editar(ingrediente: Ingrediente) {
-    this.idEditando = ingrediente.id!;
-    this.form.setValue({
-      nombre: ingrediente.nombre,
-      precio: ingrediente.precio,
-      unidad: ingrediente.unidad
-    });
-  }
 
-  cancelarEdicion() {
-    this.idEditando = null;
-    this.form.reset({ nombre: '', precio: 0, unidad: '' });
-  }
+    request$.subscribe({
+      next: () => {
+        this.cancelarEdicion();
+        this.cargarIngredientes();
+      },
+      error: (err) => {
+        console.error('Error en guardar:', err);
+        if (err.error?.message) {
+          alert('Error del backend:\n' + JSON.stringify(err.error.message, null, 2));
+        }
+      }
+    });
+  }
 
-  eliminar(id: number) {
-    this.ingredientesService.deleteIngrediente(id).subscribe(() => {
-      this.ingredientes = this.ingredientes.filter(i => i.id !== id);
-    });
-  }
+  editar(ingrediente: Ingrediente) {
+    this.idEditando = ingrediente.id!;
+    this.form.setValue({
+      nombre: ingrediente.nombre,
+      precio: ingrediente.precio,
+      unidad: ingrediente.unidad,
+      peso: ingrediente.peso,
+      unidadPeso: ingrediente.unidadPeso ?? 'g'
+    });
+  }
+
+  cancelarEdicion() {
+    this.idEditando = null;
+    this.form.reset({
+      nombre: '',
+      precio: 0,
+      unidad: '',
+      peso: null,
+      unidadPeso: 'g'
+    });
+  }
+
+  eliminar(id: number) {
+    this.ingredientesService.deleteIngrediente(id).subscribe(() => {
+      this.ingredientes = this.ingredientes.filter(i => i.id !== id);
+    });
+  }
+
+  convertirAKg(peso: number, unidad: string): number {
+    if (!peso || !unidad) return 0;
+
+    switch (unidad) {
+      case 'g':
+        return peso / 1000;
+      case 'mg':
+        return peso / 1_000_000;
+      case 'lb':
+        return peso * 0.453592;
+      case 'oz':
+        return peso * 0.0283495;
+      default:
+        return 0;
+    }
+  }
 }
